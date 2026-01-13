@@ -251,31 +251,34 @@ float readBatteryVoltage() {
  * @param v Battery voltage in volts
  * @return Estimated percentage (0-100)
  * 
- * Generic battery voltage curve:
- * - 8.0V or below → 0% (cutoff/empty)
- * - 8.0V - 10.0V → 0-20% (low battery)
- * - 10.0V - 12.0V → 20-60% (mid range)
- * - 12.0V - 13.0V → 60-85% (good charge)
- * - 13.0V - 14.0V → 85-100% (full)
- * - 14.0V or above → 100% (charging/full)
+ * Lead Acid 12V battery voltage curve:
+ * - 11.7V or below → 0% (empty - needs charging)
+ * - 11.8V → 10%
+ * - 12.0V → 25%
+ * - 12.2V → 50%
+ * - 12.4V → 75%
+ * - 12.6V or above → 100% (fully charged)
  * 
- * Note: Adjust these ranges based on your specific battery type
+ * Note: Voltage should be measured at rest (no load/charge for 30+ min)
  */
 int lifepo4Percent(float v) {
-  if (v <= 8.0) return 0;
-  if (v >= 14.0) return 100;
+  if (v <= 11.7) return 0;
+  if (v >= 12.6) return 100;
   
-  // 0-20%: 8.0V to 10.0V
-  if (v < 10.0) return (int)((v - 8.0) / 2.0 * 20.0);
+  // 0-10%: 11.7V to 11.8V
+  if (v < 11.8) return (int)((v - 11.7) / 0.1 * 10.0);
   
-  // 20-60%: 10.0V to 12.0V
-  if (v < 12.0) return 20 + (int)((v - 10.0) / 2.0 * 40.0);
+  // 10-25%: 11.8V to 12.0V
+  if (v < 12.0) return 10 + (int)((v - 11.8) / 0.2 * 15.0);
   
-  // 60-85%: 12.0V to 13.0V
-  if (v < 13.0) return 60 + (int)((v - 12.0) / 1.0 * 25.0);
+  // 25-50%: 12.0V to 12.2V
+  if (v < 12.2) return 25 + (int)((v - 12.0) / 0.2 * 25.0);
   
-  // 85-100%: 13.0V to 14.0V
-  return 85 + (int)((v - 13.0) / 1.0 * 15.0);
+  // 50-75%: 12.2V to 12.4V
+  if (v < 12.4) return 50 + (int)((v - 12.2) / 0.2 * 25.0);
+  
+  // 75-100%: 12.4V to 12.6V
+  return 75 + (int)((v - 12.4) / 0.2 * 25.0);
 }
 
 // ============================================================================
@@ -317,6 +320,11 @@ String htmlPage() {
   s += ".status-auto{background:#f39c12;color:white}";
   s += ".status-manual{background:#95a5a6;color:white}";
   s += "small{color:#7f8c8d}";
+  s += ".ref-table{width:100%;border-collapse:collapse;margin-top:15px;font-size:14px}";
+  s += ".ref-table td{padding:6px 8px;border-bottom:1px solid #eee}";
+  s += ".ref-table td:first-child{font-weight:700;color:#2c3e50}";
+  s += ".ref-table td:last-child{color:#7f8c8d;text-align:right}";
+  s += ".ref-title{font-weight:600;color:#2c3e50;margin-top:20px;margin-bottom:10px;font-size:14px}";
   s += "</style>";
   s += "</head><body>";
   
@@ -345,6 +353,18 @@ String htmlPage() {
   s += "<button onclick=\"fetch('/relay?on=1').then(()=>tick())\">Force ON</button> ";
   s += "<button onclick=\"fetch('/relay?on=0').then(()=>tick())\">Force OFF</button>";
   s += "</div>";
+  
+  // Battery voltage reference table
+  s += "<div class='ref-title'>📊 Battery Voltage Reference</div>";
+  s += "<table class='ref-table'>";
+  s += "<tr><td>12.6V</td><td>100% (fully charged)</td></tr>";
+  s += "<tr><td>12.4V</td><td>75%</td></tr>";
+  s += "<tr><td>12.2V</td><td>50%</td></tr>";
+  s += "<tr><td>12.0V</td><td>25% 🟢 (load turns ON)</td></tr>";
+  s += "<tr><td>11.8V</td><td>10%</td></tr>";
+  s += "<tr><td>11.7V</td><td>0% (empty)</td></tr>";
+  s += "<tr><td>8.0V</td><td>🔴 Load turns OFF</td></tr>";
+  s += "</table>";
   
   // Footer info
   s += "<div class='row' style='margin-top:20px'><small>Updates every 1 second from <code>/status.json</code></small></div>";
