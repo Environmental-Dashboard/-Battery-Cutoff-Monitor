@@ -31,9 +31,9 @@
  *   ADC_NODE → GPIO36 (VP)
  *   Capacitor from ADC_NODE to GND (0.1µF - 1µF)
  * 
- * Relay Control (NC Cutoff):
+ * Relay Control (NO - Normally Open):
  *   DC-DC Output+ → Relay COM
- *   Relay NC → Load+ (Sensor+)
+ *   Relay NO → Load+ (Sensor+)
  *   DC-DC GND → Load GND and ESP32 GND (common ground)
  * 
  * ESP32 Power (BEFORE relay cutoff):
@@ -148,8 +148,8 @@ const int SAMPLES = 32;       // Number of samples to average for stable reading
 //
 // ============================================================================
 
-const float V_CUTOFF = 12.0;     // Disconnect load at or below this voltage
-const float V_RECONNECT = 12.9;  // Reconnect load at or above this voltage
+const float V_CUTOFF = 8.0;      // Disconnect load at or below this voltage
+const float V_RECONNECT = 12.0;  // Reconnect load at or above this voltage
 
 // ============================================================================
 
@@ -174,9 +174,9 @@ int lastPct = 0;             // Last calculated battery percentage
  * 
  * @param energized true to energize relay coil, false to de-energize
  * 
- * Note: With NC (Normally Closed) wiring:
- * - Relay NOT energized → NC closed → Load has power
- * - Relay IS energized → NC opens → Load disconnected
+ * Note: With NO (Normally Open) wiring:
+ * - Relay NOT energized → NO open → Load has NO power
+ * - Relay IS energized → NO closes → Load connected
  */
 void setRelayEnergized(bool energized) {
   if (RELAY_ACTIVE_LOW) {
@@ -191,15 +191,15 @@ void setRelayEnergized(bool energized) {
 /**
  * Applies the desired load state
  * 
- * @param wantLoadOn true to enable load (relay OFF), false to disable (relay ON)
+ * @param wantLoadOn true to enable load (relay ON), false to disable (relay OFF)
  * 
- * This is the main function to control load power. It handles the
- * inverted logic of NC relay wiring automatically.
+ * This is the main function to control load power.
+ * NO relay logic: To enable load, relay must be energized.
  */
 void applyLoadState(bool wantLoadOn) {
   loadEnabled = wantLoadOn;
-  // NC relay logic: To enable load, relay must NOT be energized
-  setRelayEnergized(!wantLoadOn);
+  // NO relay logic: To enable load, relay must be energized
+  setRelayEnergized(wantLoadOn);
 }
 
 // ============================================================================
@@ -246,38 +246,36 @@ float readBatteryVoltage() {
 // ============================================================================
 
 /**
- * Estimates LiFePO4 battery state of charge from voltage
+ * Estimates battery state of charge from voltage
  * 
  * @param v Battery voltage in volts
  * @return Estimated percentage (0-100)
  * 
- * LiFePO4 voltage curve (at rest, no load):
- * - 12.0V or below → 0% (empty)
- * - 12.0V - 12.4V → 0-20% (steep discharge curve)
- * - 12.4V - 12.8V → 20-70% (flat discharge plateau - typical LiFePO4)
- * - 12.8V - 13.2V → 70-90% (upper plateau)
- * - 13.2V - 13.6V → 90-100% (approaching full)
- * - 13.6V or above → 100% (full or charging)
+ * Generic battery voltage curve:
+ * - 8.0V or below → 0% (cutoff/empty)
+ * - 8.0V - 10.0V → 0-20% (low battery)
+ * - 10.0V - 12.0V → 20-60% (mid range)
+ * - 12.0V - 13.0V → 60-85% (good charge)
+ * - 13.0V - 14.0V → 85-100% (full)
+ * - 14.0V or above → 100% (charging/full)
  * 
- * Note: This is an approximation. Actual SOC depends on temperature,
- * load current, battery age, and rest time. Most accurate when battery
- * has been resting (no charge/discharge) for 30+ minutes.
+ * Note: Adjust these ranges based on your specific battery type
  */
 int lifepo4Percent(float v) {
-  if (v <= 12.0) return 0;
-  if (v >= 13.6) return 100;
+  if (v <= 8.0) return 0;
+  if (v >= 14.0) return 100;
   
-  // 0-20%: 12.0V to 12.4V
-  if (v < 12.4) return (int)((v - 12.0) / 0.4 * 20.0);
+  // 0-20%: 8.0V to 10.0V
+  if (v < 10.0) return (int)((v - 8.0) / 2.0 * 20.0);
   
-  // 20-70%: 12.4V to 12.8V (flat plateau region)
-  if (v < 12.8) return 20 + (int)((v - 12.4) / 0.4 * 50.0);
+  // 20-60%: 10.0V to 12.0V
+  if (v < 12.0) return 20 + (int)((v - 10.0) / 2.0 * 40.0);
   
-  // 70-90%: 12.8V to 13.2V
-  if (v < 13.2) return 70 + (int)((v - 12.8) / 0.4 * 20.0);
+  // 60-85%: 12.0V to 13.0V
+  if (v < 13.0) return 60 + (int)((v - 12.0) / 1.0 * 25.0);
   
-  // 90-100%: 13.2V to 13.6V
-  return 90 + (int)((v - 13.2) / 0.4 * 10.0);
+  // 85-100%: 13.0V to 14.0V
+  return 85 + (int)((v - 13.0) / 1.0 * 15.0);
 }
 
 // ============================================================================

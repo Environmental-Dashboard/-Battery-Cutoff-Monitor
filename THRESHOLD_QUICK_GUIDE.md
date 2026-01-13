@@ -1,172 +1,236 @@
-# Voltage Threshold Quick Reference Guide
+# Voltage Threshold Quick Guide
 
-## 🎯 Where to Change Settings
+**Quick reference for changing when your load turns on and off**
+
+---
+
+## Where to Change Settings
 
 **File:** `voltage_meter.ino`  
-**Find this line (around line 90-140):**
+**Find this (around line 147):**
 
 ```cpp
-// BATTERY PROTECTION THRESHOLDS - CUSTOMIZE THESE FOR YOUR NEEDS
+const float V_CUTOFF = 8.0;      // ← Change this number
+const float V_RECONNECT = 12.0;  // ← Change this number
 ```
-
-**Change these two values:**
-
-```cpp
-const float V_CUTOFF = 12.0;      // ← Change this
-const float V_RECONNECT = 12.9;   // ← Change this
-```
-
-## 📊 Quick Selection Chart
-
-Choose a profile that matches your needs:
-
-| Profile | Cutoff | Reconnect | Who Should Use This |
-|---------|--------|-----------|---------------------|
-| **Maximum Protection** | 12.4V | 13.2V | Old batteries, maximize lifespan |
-| **Balanced (Default)** ⭐ | 12.0V | 12.9V | Most users, good compromise |
-| **Maximum Runtime** | 11.5V | 12.5V | New batteries, need every bit of power |
-| **High-Power Loads** | 12.2V | 13.5V | Motors, pumps (prevent cycling) |
-| **Quick Reconnect** | 12.0V | 12.5V | Stable system, fast recovery |
-
-## 🔄 How It Works (Visual)
-
-```
-        14.0V ┤                 ┌─────  Charging
-             │                 │
-        13.5V ┤             ┌───┘
-             │             │
-        13.0V ┤         ┌───┘              
-             │         │
-   ┌────────────────────────────────────────────────────────┐
-   │ RECONNECT → 12.9V ┤ ────────┘                          │
-   │         │         │      ↑                             │
-   │         │         │      └─ Load turns ON here        │
-   │         12.5V ┤     │                                  │
-   │         │         │      Load stays OFF               │
-   │         │         │      (waiting to reconnect)       │
-   │         12.2V ┤     │                                  │
-   │         │         │                                    │
-   │ CUTOFF → 12.0V ┤ ────────┐                            │
-   │         │         │      │                             │
-   │         │         │      └─ Load turns OFF here       │
-   └────────────────────────────────────────────────────────┘
-        11.5V ┤     └───┐
-             │         │
-        11.0V ┤         └───  Danger Zone!
-```
-
-## ⚠️ Golden Rules
-
-1. **RECONNECT must be HIGHER than CUTOFF**
-   - ✅ Good: Cutoff=12.0V, Reconnect=12.9V
-   - ❌ Bad: Cutoff=12.9V, Reconnect=12.0V
-
-2. **Minimum gap: 0.3V** (0.5V+ recommended)
-   - ✅ Good: 0.9V gap (12.0 → 12.9)
-   - ⚠️ Risky: 0.2V gap (may cause cycling)
-
-3. **Never go below 11.0V cutoff** (damages LiFePO4)
-
-4. **Never set reconnect above 14.0V** (unrealistic)
-
-## 🔧 Copy-Paste Examples
-
-Just copy these into your code!
-
-### Example 1: Maximum Battery Protection
-```cpp
-const float V_CUTOFF = 12.4;      // Disconnect at 20% SOC
-const float V_RECONNECT = 13.2;   // Reconnect at 85% SOC
-```
-**Use when:** Battery longevity is top priority
 
 ---
 
-### Example 2: Balanced (Default) ⭐
-```cpp
-const float V_CUTOFF = 12.0;      // Disconnect at 5% SOC
-const float V_RECONNECT = 12.9;   // Reconnect at 70% SOC
+## How It Works
+
 ```
-**Use when:** Normal operation, good for most users
+Battery Voltage
+    14V ┤                    ┌──── Charging
+    13V ┤                ┌───┘
+    12V ┤ ━━━━━━━━━━━━━━┥ RECONNECT (Load turns ON here)
+    11V ┤           ↑    │
+    10V ┤           │    │  Load stays OFF while voltage rises
+     9V ┤           │    │
+     8V ┤ CUTOFF ━━━┥    │ (Load turns OFF here)
+     7V ┤           ↓
+```
+
+**Example:**
+- Battery drains to **8.0V** → Load turns OFF 🔴
+- Battery charges to **12.0V** → Load turns ON 🟢
+- The gap (4V) prevents rapid on/off switching
 
 ---
 
-### Example 3: Maximum Runtime
+## Ready-to-Use Examples
+
+Just copy and paste these into your code!
+
+### Example 1: Default (8V - 12V) ⭐
 ```cpp
-const float V_CUTOFF = 11.5;      // Disconnect at ~1% SOC
-const float V_RECONNECT = 12.5;   // Reconnect at 40% SOC
+const float V_CUTOFF = 8.0;      
+const float V_RECONNECT = 12.0;  
 ```
-**Use when:** Need every bit of runtime, healthy battery
+**Good for:** Most applications, large voltage range
 
 ---
 
-### Example 4: Heavy Loads (Motors, Pumps)
+### Example 2: 12V Car Battery (Lead Acid)
 ```cpp
-const float V_CUTOFF = 12.2;      // Disconnect before voltage sag
-const float V_RECONNECT = 13.5;   // Wait for full recharge
+const float V_CUTOFF = 11.5;     
+const float V_RECONNECT = 12.4;  
 ```
-**Use when:** Load causes big voltage drops
+**Good for:** Lead acid batteries, prevents deep discharge
+
+---
+
+### Example 3: 12V LiFePO4 Battery
+```cpp
+const float V_CUTOFF = 12.0;     
+const float V_RECONNECT = 12.9;  
+```
+**Good for:** LiFePO4 batteries, protects cells
+
+---
+
+### Example 4: Maximum Runtime
+```cpp
+const float V_CUTOFF = 10.0;     
+const float V_RECONNECT = 12.0;  
+```
+**Good for:** When you need every bit of battery capacity
 
 ---
 
 ### Example 5: Quick Reconnect
 ```cpp
-const float V_CUTOFF = 12.0;      // Standard cutoff
-const float V_RECONNECT = 12.5;   // Fast reconnect
+const float V_CUTOFF = 10.0;     
+const float V_RECONNECT = 11.0;  
 ```
-**Use when:** Small loads, fast solar recovery
+**Good for:** Fast charging systems, small voltage gap
 
 ---
 
-### Example 6: Conservative (Winter/Cold)
+### Example 6: Conservative (Protect Battery)
 ```cpp
-const float V_CUTOFF = 12.6;      // Early disconnect
-const float V_RECONNECT = 13.3;   // Wait for good charge
+const float V_CUTOFF = 12.0;     
+const float V_RECONNECT = 13.5;  
 ```
-**Use when:** Cold weather, less solar, protect battery
-
-## 📝 After Changing Values
-
-1. **Save the file** (Ctrl+S / Cmd+S)
-2. **Upload to ESP32** (Click → button)
-3. **Open Serial Monitor** (115200 baud)
-4. **Verify your values:**
-   ```
-   Cutoff: 12.00V, Reconnect: 12.90V  ← Check this line
-   ```
-5. **Test for a few days** and adjust if needed
-
-## 🐛 Troubleshooting
-
-**Problem: Load keeps cycling on/off**
-- **Fix:** Increase the gap
-- Change from 12.0→12.5 (0.5V gap) to 12.0→13.0 (1.0V gap)
-
-**Problem: Load disconnects too early**
-- **Fix:** Lower V_CUTOFF
-- Change from 12.4V to 12.0V or 11.8V
-
-**Problem: Takes forever to reconnect**
-- **Fix:** Lower V_RECONNECT
-- Change from 13.5V to 12.9V or 12.6V
-
-**Problem: Battery seems damaged**
-- **Fix:** Raise V_CUTOFF (you're discharging too deeply!)
-- Never go below 11.5V, consider raising to 12.2V+
-
-## 🔍 Monitor Your System
-
-Watch the Serial Monitor output:
-```
-12.45,25,1    ← 12.45V, 25%, Load ON
-12.32,18,1
-12.00,5,0     ← Disconnected here! (hit cutoff)
-12.15,8,0     ← Still off (below reconnect)
-12.90,70,1    ← Reconnected here! (hit reconnect)
-```
-
-Or use the web interface at `http://[ESP32_IP]/`
+**Good for:** Maximize battery life, wait for full charge
 
 ---
 
-**Need more details?** See the full [README.md](README.md) file, especially the [Customizing Voltage Thresholds](README.md#customizing-voltage-thresholds) section.
+## Important Rules
+
+✅ **RECONNECT must be HIGHER than CUTOFF**
+- Good: Cutoff=8V, Reconnect=12V ✅
+- Bad: Cutoff=12V, Reconnect=8V ❌
+
+✅ **Minimum gap: 0.5V** (1V or more recommended)
+- Good: 8V → 12V (4V gap) ✅
+- Risky: 11V → 11.5V (0.5V gap) ⚠️
+
+✅ **Don't go too low**
+- Most batteries shouldn't go below 10V
+- Default 8V is for emergencies
+
+✅ **Test your settings**
+- Monitor for a few days
+- Adjust if needed
+
+---
+
+## After Changing Values
+
+1. **Save the file** (Ctrl+S or Cmd+S)
+2. **Upload to ESP32** (Click → button)
+3. **Hold BOOT button** when "Connecting..." appears
+4. **Check Serial Monitor** (115200 baud):
+   ```
+   Cutoff: 8.00V, Reconnect: 12.00V  ← Verify your values
+   ```
+5. **Open web page** and test!
+
+---
+
+## Troubleshooting
+
+### Load keeps cycling on/off rapidly
+
+**Problem:** Gap is too small or battery voltage sags under load
+
+**Fix:** Increase the gap
+```cpp
+// BEFORE (bad)
+const float V_CUTOFF = 11.0;
+const float V_RECONNECT = 11.5;   // Only 0.5V gap!
+
+// AFTER (good)
+const float V_CUTOFF = 11.0;
+const float V_RECONNECT = 12.5;   // 1.5V gap
+```
+
+---
+
+### Load turns off too early
+
+**Problem:** Cutoff voltage is too high
+
+**Fix:** Lower the cutoff
+```cpp
+// BEFORE
+const float V_CUTOFF = 12.0;      // Too high
+
+// AFTER
+const float V_CUTOFF = 10.5;      // Lower = more runtime
+```
+
+---
+
+### Takes forever to turn back on
+
+**Problem:** Reconnect voltage is too high
+
+**Fix:** Lower the reconnect
+```cpp
+// BEFORE
+const float V_RECONNECT = 14.0;   // Too high
+
+// AFTER
+const float V_RECONNECT = 12.0;   // Reconnects faster
+```
+
+---
+
+## Monitor Your System
+
+### Serial Monitor Output (CSV format)
+```
+11.87,57,0    ← Voltage, Percent, Load (0=OFF, 1=ON)
+11.85,57,0
+12.00,60,1    ← Load turned ON at 12V!
+12.15,62,1
+```
+
+### Web Dashboard
+- Shows voltage, percentage, and load status
+- Updates every second
+- Control buttons for testing
+
+---
+
+## Relay Information
+
+**Your system uses NO (Normally Open) relay:**
+
+```
+Relay OFF → Load has NO power 🔴
+Relay ON  → Load has power 🟢
+```
+
+**Wiring:**
+- Connect power to **COM** terminal
+- Connect load to **NO** terminal (NOT NC!)
+- Don't use the NC terminal
+
+---
+
+## Quick Reference Table
+
+| Cutoff | Reconnect | Gap | Use Case |
+|--------|-----------|-----|----------|
+| 8.0V | 12.0V | 4.0V | Default, wide range |
+| 10.0V | 12.0V | 2.0V | More runtime |
+| 11.5V | 12.4V | 0.9V | Car battery (lead acid) |
+| 12.0V | 12.9V | 0.9V | LiFePO4 battery |
+| 12.0V | 13.5V | 1.5V | Conservative, protect battery |
+| 10.0V | 11.0V | 1.0V | Fast reconnect |
+
+---
+
+## Need More Help?
+
+See the full **README.md** for:
+- Complete wiring diagrams
+- Troubleshooting guide
+- Web interface instructions
+- Safety information
+
+---
+
+**Quick tip:** Start with the default settings (8V/12V) and adjust based on your battery type and how the system behaves!
