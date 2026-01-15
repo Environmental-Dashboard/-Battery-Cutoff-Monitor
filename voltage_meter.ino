@@ -654,26 +654,27 @@ void handleSettings() {
         Serial.println("  -> Load already OFF (voltage at or below cutoff)");
       }
     }
-    else if (lastVBat >= V_RECONNECT) {
-      // Voltage at or above reconnect - must be ON
+    else if (lastVBat > V_CUTOFF) {
+      // Voltage is above cutoff
       if (!loadEnabled) {
-        Serial.println("  -> Turning load ON (voltage at or above reconnect)");
-        applyLoadState(true);
-      } else {
-        Serial.println("  -> Load already ON (voltage at or above reconnect)");
+        // Load is OFF - need to reach reconnect to turn ON
+        if (lastVBat >= V_RECONNECT) {
+          Serial.println("  -> Turning load ON (voltage at or above reconnect)");
+          applyLoadState(true);
+        } else {
+          Serial.print("  -> Load stays OFF (voltage above cutoff but below reconnect: ");
+          Serial.print(V_CUTOFF, 2);
+          Serial.print("V < ");
+          Serial.print(lastVBat, 2);
+          Serial.print("V < ");
+          Serial.print(V_RECONNECT, 2);
+          Serial.println("V)");
+        }
       }
-    }
-    else {
-      // Voltage is between thresholds - keep current state but log it
-      Serial.print("  -> Load stays ");
-      Serial.print(loadEnabled ? "ON" : "OFF");
-      Serial.print(" (voltage between thresholds: ");
-      Serial.print(V_CUTOFF, 2);
-      Serial.print("V < ");
-      Serial.print(lastVBat, 2);
-      Serial.print("V < ");
-      Serial.print(V_RECONNECT, 2);
-      Serial.println("V)");
+      else {
+        // Load is ON and voltage > cutoff - keep it ON
+        Serial.println("  -> Load stays ON (voltage above cutoff)");
+      }
     }
     
     // Force relay update to ensure hardware state matches
