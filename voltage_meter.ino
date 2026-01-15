@@ -694,7 +694,7 @@ void handleSettings() {
   // Accept calibration factor changes
   if (server.hasArg("calibrate")) {
     float newCal = server.arg("calibrate").toFloat();
-    if (newCal > 0.8 && newCal < 1.2) {  // Reasonable calibration range
+    if (newCal > 0.5 && newCal < 2.0) {  // Extended range to handle larger calibration needs
       CALIBRATION_FACTOR = newCal;
       changed = true;
       Serial.print("! CALIBRATION FACTOR CHANGED to: ");
