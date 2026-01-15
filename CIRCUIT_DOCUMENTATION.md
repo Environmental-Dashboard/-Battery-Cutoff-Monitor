@@ -41,7 +41,7 @@ This circuit manages power distribution from a solar panel and LiFePO4 battery, 
 
 ## Circuit Diagram
 
-![Circuit Wiring](circuit_diagram.png)
+View the complete wiring diagram here: [Cirkit Designer - Battery Monitor Wiring](https://app.cirkitdesigner.com/project/de4b9459-3ebd-45a3-887c-bb5d5f185a88)
 
 ---
 
