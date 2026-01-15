@@ -130,6 +130,7 @@
 
 #include <WiFi.h>
 #include <WebServer.h>
+#include <Preferences.h>  // For persistent storage (replaces EEPROM on ESP32)
 
 // ============================================================================
 // CONFIGURATION SECTION - MODIFY THESE VALUES FOR YOUR SETUP
@@ -173,6 +174,7 @@ const float RBOT = 10000.0;   // Bottom resistor (ADC node to GND) in Ohms
 const float VREF = 3.3;       // ESP32 reference voltage (nominal, but varies per chip)
 const int ADC_MAX = 4095;     // 12-bit ADC resolution (0-4095)
 float CALIBRATION_FACTOR = 1.0;  // Calibration factor (1.0 = no calibration, adjust as needed)
+Preferences preferences;  // For saving calibration to flash memory
 const int SAMPLES = 200;      // Number of samples to average for stable reading (increased for maximum stability)
 
 // ============================================================================
@@ -727,8 +729,15 @@ void handleSettings() {
     if (newCal > 0.5 && newCal < 2.0) {  // Extended range to handle larger calibration needs
       CALIBRATION_FACTOR = newCal;
       changed = true;
+      
+      // Save calibration factor to flash memory so it persists across reboots
+      preferences.begin("voltmeter", false);
+      preferences.putFloat("cal_factor", CALIBRATION_FACTOR);
+      preferences.end();
+      
       Serial.print("! CALIBRATION FACTOR CHANGED to: ");
       Serial.println(CALIBRATION_FACTOR, 4);
+      Serial.println("  Calibration saved to flash memory (will persist after reboot)");
       Serial.println("  Calibration formula: factor = measured_voltage / displayed_voltage");
     }
   }
@@ -823,6 +832,17 @@ void setup() {
   Serial.println("========================================");
   Serial.println("  Battery Cutoff Monitor Starting");
   Serial.println("========================================");
+  
+  // Load saved calibration factor from flash memory
+  preferences.begin("voltmeter", false);  // false = read/write mode
+  float savedCal = preferences.getFloat("cal_factor", 1.0);  // Default to 1.0 if not found
+  if (savedCal != 1.0) {
+    CALIBRATION_FACTOR = savedCal;
+    Serial.print("Loaded saved calibration factor: ");
+    Serial.println(CALIBRATION_FACTOR, 4);
+  } else {
+    Serial.println("No saved calibration found, using default: 1.0");
+  }
   
   // Configure relay pin as output
   pinMode(RELAY_PIN, OUTPUT);
