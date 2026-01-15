@@ -282,9 +282,24 @@ GET http://[ESP32-IP]/status.json
   "uptime_ms": 123456,
   "v_cutoff": 11.00,
   "v_reconnect": 12.90,
-  "calibration_factor": 1.0000
+  "calibration_factor": 1.0000,
+  "cycle_count": 42,
+  "turn_on_count_48h": 15,
+  "last_switch_time_ms": 123000
 }
 ```
+
+**Field descriptions:**
+- `voltage_v`: Current battery voltage in volts
+- `load_on`: Current load state (true = ON, false = OFF)
+- `auto_mode`: Control mode (true = automatic, false = manual)
+- `v_cutoff`: Lower threshold voltage (turns OFF at or below this)
+- `v_reconnect`: Upper threshold voltage (turns ON at or above this)
+- `calibration_factor`: ADC calibration factor (1.0 = no calibration)
+- `cycle_count`: Number of times load has turned ON (resets at 10,000)
+- `turn_on_count_48h`: Number of times load turned ON in the last 48 hours
+- `last_switch_time_ms`: Timestamp (milliseconds since boot) of last relay state change
+- `uptime_ms`: System uptime in milliseconds
 
 **Change thresholds:**
 ```
@@ -305,6 +320,30 @@ GET http://[ESP32-IP]/settings?lower=11.0&upper=12.5
 GET http://[ESP32-IP]/relay?auto=1      (enable auto mode)
 GET http://[ESP32-IP]/relay?on=1        (force load ON)
 GET http://[ESP32-IP]/relay?on=0        (force load OFF)
+```
+
+**Get cycle statistics:**
+The `/status.json` endpoint includes cycle tracking:
+- `cycle_count`: Total number of times load has turned ON (increments each turn-ON, resets at 10,000)
+- `turn_on_count_48h`: Number of times load turned ON in the last 48 hours
+- `last_switch_time_ms`: Timestamp of last relay state change (milliseconds since boot)
+
+**Example: Get cycle count:**
+```bash
+curl http://10.17.195.65/status.json | jq '.cycle_count'
+```
+
+**Example: Get 48-hour turn-on frequency:**
+```bash
+curl http://10.17.195.65/status.json | jq '.turn_on_count_48h'
+```
+
+**Example: Get last switch time (convert to readable format):**
+```bash
+# Get timestamp
+TIMESTAMP=$(curl -s http://10.17.195.65/status.json | jq '.last_switch_time_ms')
+# Convert to seconds and display (if you have date command)
+date -r $((TIMESTAMP / 1000))
 ```
 
 ---

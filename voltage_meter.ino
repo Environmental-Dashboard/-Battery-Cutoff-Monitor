@@ -253,6 +253,15 @@ bool autoMode = true;         // Control mode: true = automatic, false = manual
 float lastVBat = 0.0;        // Last measured battery voltage
 // int lastPct = 0;          // Percentage removed - not used
 
+// Cycle counting and history tracking
+unsigned long cycleCount = 0;           // Number of times load has turned ON (resets at 10,000)
+unsigned long lastSwitchTime = 0;       // Timestamp (millis) of last relay state change
+unsigned long turnOnHistory[288];       // Store timestamps of turn-ON events (48 hours = 2880 minutes, but we'll use 288 entries for 10-minute resolution)
+int historyIndex = 0;                   // Current index in history array
+int historyCount = 0;                   // Number of entries in history
+const int MAX_CYCLE_COUNT = 10000;      // Reset cycle count at this value
+const unsigned long FORTY_EIGHT_HOURS_MS = 48UL * 60UL * 60UL * 1000UL; // 48 hours in milliseconds
+
 // Moving average for ultra-stable voltage display
 const int DISPLAY_SAMPLES = 20;  // Increased for better stability in tenths place
 float voltageHistory[20] = {0};
@@ -289,8 +298,35 @@ void setRelayEnergized(bool energized) {
  * 
  * This is the main function to control load power.
  * NO relay logic: To enable load, relay must be energized.
+ * Also tracks cycle count, last switch time, and turn-on history.
  */
 void applyLoadState(bool wantLoadOn) {
+  // Only track state changes (not redundant calls)
+  if (loadEnabled != wantLoadOn) {
+    // State is changing - record the timestamp
+    lastSwitchTime = millis();
+    
+    // If turning ON, increment cycle count and record in history
+    if (wantLoadOn) {
+      cycleCount++;
+      if (cycleCount >= MAX_CYCLE_COUNT) {
+        cycleCount = 0;  // Reset at 10,000
+        Serial.println("! Cycle count reset to 0 (reached 10,000)");
+      }
+      
+      // Add to 48-hour history
+      unsigned long currentTime = millis();
+      turnOnHistory[historyIndex] = currentTime;
+      historyIndex = (historyIndex + 1) % 288;  // Circular buffer
+      if (historyCount < 288) {
+        historyCount++;
+      }
+      
+      Serial.print("! Cycle count: ");
+      Serial.println(cycleCount);
+    }
+  }
+  
   loadEnabled = wantLoadOn;
   // NO relay logic: To enable load, relay must be energized
   setRelayEnergized(wantLoadOn);
@@ -561,6 +597,19 @@ void handleRoot() {
  * }
  */
 void handleStatus() {
+  // Calculate turn-ON count in last 48 hours
+  unsigned long currentTime = millis();
+  unsigned long fortyEightHoursAgo = currentTime - FORTY_EIGHT_HOURS_MS;
+  int turnOnCount48h = 0;
+  
+  for (int i = 0; i < historyCount; i++) {
+    // Handle wrap-around in circular buffer
+    int idx = (historyIndex - historyCount + i + 288) % 288;
+    if (turnOnHistory[idx] >= fortyEightHoursAgo) {
+      turnOnCount48h++;
+    }
+  }
+  
   String json = "{";
   json += "\"voltage_v\":" + String(lastVBat, 3) + ",";
   json += "\"load_on\":" + String(loadEnabled ? "true" : "false") + ",";
@@ -568,6 +617,9 @@ void handleStatus() {
   json += "\"v_cutoff\":" + String(V_CUTOFF, 2) + ",";
   json += "\"v_reconnect\":" + String(V_RECONNECT, 2) + ",";
   json += "\"calibration_factor\":" + String(CALIBRATION_FACTOR, 4) + ",";
+  json += "\"cycle_count\":" + String(cycleCount) + ",";
+  json += "\"turn_on_count_48h\":" + String(turnOnCount48h) + ",";
+  json += "\"last_switch_time_ms\":" + String(lastSwitchTime) + ",";
   json += "\"uptime_ms\":" + String(millis());
   json += "}";
   server.send(200, "application/json", json);
@@ -753,7 +805,15 @@ void setup() {
   
   // Initialize system in automatic mode with load enabled
   autoMode = true;
-  applyLoadState(true);  // Start with load connected
+  
+  // Initialize history array
+  for (int i = 0; i < 288; i++) {
+    turnOnHistory[i] = 0;
+  }
+  historyIndex = 0;
+  historyCount = 0;
+  
+  applyLoadState(true);  // Start with load connected (this will record first cycle)
   
   Serial.println("Initial state: Load ON, Auto mode");
   Serial.print("Voltage divider: ");
