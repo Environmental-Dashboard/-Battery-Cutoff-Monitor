@@ -166,7 +166,7 @@ const float RBOT = 10000.0;   // Bottom resistor (ADC node to GND) in Ohms
 // ADC Configuration
 const float VREF = 3.3;       // ESP32 reference voltage (typically 3.3V)
 const int ADC_MAX = 4095;     // 12-bit ADC resolution (0-4095)
-const int SAMPLES = 100;      // Number of samples to average for stable reading (increased for stability)
+const int SAMPLES = 150;      // Number of samples to average for stable reading (increased to reduce tenths place noise)
 
 // ============================================================================
 // BATTERY PROTECTION THRESHOLDS - CUSTOMIZE THESE FOR YOUR NEEDS
@@ -247,9 +247,10 @@ float lastVBat = 0.0;        // Last measured battery voltage
 // int lastPct = 0;          // Percentage removed - not used
 
 // Moving average for ultra-stable voltage display
-const int DISPLAY_SAMPLES = 10;
-float voltageHistory[10] = {0};
+const int DISPLAY_SAMPLES = 20;  // Increased for better stability in tenths place
+float voltageHistory[20] = {0};
 int voltageIndex = 0;
+bool historyInitialized = false;  // Track if buffer is filled
 
 // ============================================================================
 // RELAY CONTROL FUNCTIONS
@@ -291,16 +292,32 @@ void applyLoadState(bool wantLoadOn) {
 /**
  * Smooths voltage reading with moving average
  * Provides ultra-stable display value
+ * 
+ * Uses exponential moving average approach: fills buffer first, then uses
+ * moving average to eliminate noise in tenths place
  */
 float smoothVoltage(float newVoltage) {
   voltageHistory[voltageIndex] = newVoltage;
   voltageIndex = (voltageIndex + 1) % DISPLAY_SAMPLES;
   
+  // Mark as initialized once buffer is filled
+  if (voltageIndex == 0) {
+    historyInitialized = true;
+  }
+  
+  // If buffer not fully filled yet, use only available samples
+  int samplesToUse = historyInitialized ? DISPLAY_SAMPLES : voltageIndex;
+  
   float sum = 0;
-  for (int i = 0; i < DISPLAY_SAMPLES; i++) {
+  for (int i = 0; i < samplesToUse; i++) {
     sum += voltageHistory[i];
   }
-  return sum / DISPLAY_SAMPLES;
+  
+  float average = sum / samplesToUse;
+  
+  // Round to nearest 0.01V to reduce flickering in tenths place
+  // This helps stabilize the display while maintaining accuracy
+  return round(average * 100.0) / 100.0;
 }
 
 // ============================================================================
