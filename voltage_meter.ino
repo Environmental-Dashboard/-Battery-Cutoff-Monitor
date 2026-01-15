@@ -813,7 +813,10 @@ void setup() {
   historyIndex = 0;
   historyCount = 0;
   
-  applyLoadState(true);  // Start with load connected (this will record first cycle)
+  // Set initial state without counting as a cycle
+  loadEnabled = true;
+  setRelayEnergized(true);
+  lastSwitchTime = millis();
   
   Serial.println("Initial state: Load ON, Auto mode");
   Serial.print("Voltage divider: ");
