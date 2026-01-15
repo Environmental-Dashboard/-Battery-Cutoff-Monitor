@@ -1,81 +1,88 @@
 # Battery Cutoff Monitor - ESP32
 
-**Simple battery protection system that automatically disconnects your load when voltage gets too low.**
+Automatic battery protection system that disconnects your load when voltage gets too low and reconnects when voltage recovers.
 
-🔋 **Protects your battery** • 🌐 **Web dashboard** • ⚙️ **Easy to customize**
+## Circuit Diagram
 
-> **📖 FULL DOCUMENTATION:** [CIRCUIT_DOCUMENTATION.md](CIRCUIT_DOCUMENTATION.md) - Complete wiring diagrams, component list, power calculations, and technical specs  
-> **🖼️ Adding Images?:** [HOW_TO_ADD_IMAGES.md](HOW_TO_ADD_IMAGES.md) - Guide for adding circuit diagrams and photos
-
----
-
-## What Does It Do?
-
-This device watches your battery voltage. When the voltage drops too low (default: **8V**), it automatically turns OFF your load. When the battery charges back up (to **12V**), it turns the load back ON.
-
-**Current Settings:**
-- 📉 **Turns OFF at:** 8.0V
-- 📈 **Turns ON at:** 12.0V
-- 🔌 **Relay Type:** NO (Normally Open)
+![Circuit Wiring](circuit_diagram.png)
 
 ---
 
-## Quick Start
+## What It Does
 
-### 1. What You Need
+Monitors your battery voltage continuously. When voltage drops at or below the cutoff threshold (default: 12.0V), it turns OFF your load. When voltage rises to or above the reconnect threshold (default: 12.9V), it turns the load back ON.
 
-| Item | Example |
-|------|---------|
-| ESP32 board | Any ESP32 dev board |
+**Current Default Settings:**
+- Turns OFF at: 12.0V
+- Turns ON at: 12.9V  
+- Relay Type: NO (Normally Open)
+- Relay Pin: GPIO27
+
+---
+
+## Parts Needed
+
+| Part | Specification |
+|------|---------------|
+| ESP32 board | Any ESP32 development board |
 | Relay module | 5V relay with NO contact |
-| 2 Resistors | 10kΩ and 1kΩ |
-| 1 Capacitor | 0.1µF to 1µF |
-| Battery | Your battery (works with 8V-16V) |
-| Wires | Jumper wires |
+| Top resistor | 100kΩ (Brown-Black-Yellow) |
+| Bottom resistor | 10kΩ (Brown-Black-Orange) |
+| Capacitor | 0.1µF to 1µF ceramic |
+| Battery | 8V-16V (tested with 12.8V LiFePO4) |
+| Wires | Jumper wires and power wires |
 
-### 2. Wire It Up
+---
 
-#### A. Measure Battery Voltage (Voltage Divider)
+## Wiring Instructions
 
-```
-Battery + ──→ 10kΩ resistor ──→ [Middle Point] ──→ 1kΩ resistor ──→ GND
-                                      ↓
-                                  GPIO36 (VP)
-                                      ↓
-                              Capacitor to GND
-```
-
-**Why?** The ESP32 can only read 0-3.3V. The resistors divide your battery voltage down to a safe level.
-
-#### B. Connect the Relay (NO - Normally Open)
+### A. Battery Voltage Measurement (Voltage Divider)
 
 ```
-Power Supply + ──→ Relay COM
-Relay NO ──→ Your Load + (sensor, lights, etc.)
+Battery + ──→ 100kΩ resistor ──→ [Connection Point] ──→ 10kΩ resistor ──→ GND
+                                          ↓
+                                      GPIO36 (VP)
+                                          ↓
+                                   Capacitor to GND
+```
+
+The resistors divide the battery voltage down to a safe level (0-3.3V) for the ESP32 ADC input.
+
+### B. Relay Connection (NO Terminal)
+
+```
+Power Supply + ──→ Relay COM terminal
+Relay NO terminal ──→ Your Load +
 Load GND ──→ Common GND
 ```
 
-**Important:** Use the **NO (Normally Open)** terminal, not NC!
+**How NO (Normally Open) works:**
+- Relay OFF = NO contact open = Load has no power
+- Relay ON = NO contact closed = Load gets power
 
-- When relay is OFF → NO is open → Load has no power
-- When relay is ON → NO closes → Load gets power
-
-#### C. Control the Relay
+### C. Relay Control from ESP32
 
 ```
-ESP32 GPIO2 ──→ Relay IN pin
+ESP32 GPIO27 ──→ Relay IN pin
 ESP32 GND ──→ Relay GND
-5V ──→ Relay VCC (power for relay)
+5V supply ──→ Relay VCC
 ```
 
-#### D. Power the ESP32
+### D. ESP32 Power
 
 ```
-5V power supply ──→ ESP32 VIN (or 5V pin)
+5V power supply ──→ ESP32 VIN
 GND ──→ ESP32 GND
 ```
 
-**⚠️ CRITICAL:** All grounds must be connected together!
+### IMPORTANT: Common Ground
+
+All grounds must be connected together:
+- Battery negative
+- ESP32 GND
+- Relay GND  
+- Load GND
+- Power supply GND
 
 ---
 
@@ -83,314 +90,331 @@ GND ──→ ESP32 GND
 
 ### Step 1: Install Arduino IDE
 
-Download from: [arduino.cc](https://www.arduino.cc/en/software)
+Download from: https://www.arduino.cc/en/software
 
-### Step 2: Add ESP32 Support
+### Step 2: Add ESP32 Board Support
 
 1. Open Arduino IDE
-2. Go to: **File → Preferences**
-3. In "Additional Board Manager URLs", paste:
+2. File → Preferences
+3. Add this URL to "Additional Board Manager URLs":
    ```
    https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
    ```
-4. Go to: **Tools → Board → Boards Manager**
-5. Search "ESP32" and click **Install**
+4. Tools → Board → Boards Manager
+5. Search "ESP32" and install
 
-### Step 3: Configure WiFi
+### Step 3: Configure WiFi Credentials
 
-Open `voltage_meter.ino` and change these lines (around line 61):
+Open `voltage_meter.ino` and edit line 61:
 
 ```cpp
-const char* WIFI_SSID = "YourWiFiName";      // ← Your WiFi name
-const char* WIFI_PASS = "YourPassword";      // ← Your WiFi password
+const char* WIFI_SSID = "YourWiFiName";
+const char* WIFI_PASS = "YourPassword";
 ```
 
-### Step 4: Upload to ESP32
+### Step 4: Upload Code
 
-1. Connect ESP32 to computer via USB
-2. **Tools → Board** → Select "ESP32 Dev Module"
-3. **Tools → Port** → Select your port (like `/dev/tty.usbserial-0001`)
-4. **Tools → Upload Speed** → Select "115200"
-5. Click **Upload** button (→)
-6. **If it says "Connecting..."** → Hold the BOOT button on your ESP32
+1. Connect ESP32 to computer with USB cable
+2. Tools → Board → "ESP32 Dev Module"
+3. Tools → Port → Select your port (e.g., /dev/cu.usbserial-0001)
+4. Tools → Upload Speed → "115200"
+5. Click Upload button
+6. If it says "Connecting...", hold the BOOT button on ESP32
 7. Wait for "Done uploading"
 
-### Step 5: View Results
+### Step 5: Get IP Address
 
-1. **Tools → Serial Monitor**
-2. Set baud to **115200**
+1. Tools → Serial Monitor
+2. Set baud rate to 115200
 3. Press RESET button on ESP32
-4. You'll see the IP address printed
-5. Open that IP in your web browser!
+4. Note the IP address printed (e.g., 10.17.195.65)
+5. Open that IP in your web browser
+
+---
+
+## How To Change Voltage Thresholds
+
+### Method 1: Edit the Code (Permanent Change)
+
+Open `voltage_meter.ino` and find line 147:
+
+```cpp
+float V_CUTOFF = 12.0;     // Turn OFF at this voltage
+float V_RECONNECT = 12.9;  // Turn ON at this voltage
+```
+
+Change the values to what you need, then upload the code again.
+
+**Example 1: For 12V Lead Acid Battery**
+```cpp
+float V_CUTOFF = 11.5;     // Protect battery at 11.5V
+float V_RECONNECT = 12.4;  // Reconnect at 12.4V
+```
+
+**Example 2: Allow More Battery Discharge**
+```cpp
+float V_CUTOFF = 11.0;     // Use more capacity before cutoff
+float V_RECONNECT = 12.0;  // Resume at 12V
+```
+
+**Example 3: Conservative Protection**
+```cpp
+float V_CUTOFF = 12.5;     // Cut off early to preserve battery
+float V_RECONNECT = 13.2;  // Wait for full charge
+```
+
+### Method 2: Change via Web API (Temporary Until Restart)
+
+Send HTTP request to change thresholds on the fly:
+
+**Set cutoff to 11V, reconnect at 12V:**
+```
+http://[ESP32-IP]/settings?lower=11.0&upper=12.0
+```
+
+**Example with curl:**
+```bash
+curl "http://10.17.195.65/settings?lower=11.0&upper=12.0"
+```
+
+**Response:**
+```json
+{
+  "v_cutoff": 11.00,
+  "v_reconnect": 12.00,
+  "changed": true
+}
+```
+
+**The system will immediately apply the new thresholds:**
+- If voltage is now below the new cutoff, load turns OFF instantly
+- If voltage is now above the new reconnect, load turns ON instantly
 
 ---
 
 ## Web Dashboard
 
-Once running, open your browser to the IP address shown (example: `http://10.17.192.114`)
+Open your browser to the ESP32 IP address (e.g., http://10.17.195.65)
 
-**You'll see:**
-- 🔋 **Battery Voltage** (updates every second)
-- 📊 **Battery Percentage** (estimated)
-- 🔴/🟢 **Load Status** (ON or OFF)
-- 🎛️ **Control Buttons:**
-  - **Auto Mode** - Automatic control (turns off at 8V, on at 12V)
-  - **Force ON** - Manually turn load on (ignores voltage)
-  - **Force OFF** - Manually turn load off
+**Dashboard shows:**
+- Current battery voltage (updates every second)
+- Load status (ON or OFF with color indicator)
+- Control mode (AUTO or MANUAL)
+- Current cutoff threshold
+- Current reconnect threshold
+
+**Control buttons:**
+- Auto - Automatic control based on voltage thresholds
+- Force ON - Manually turn load ON (ignores voltage)
+- Force OFF - Manually turn load OFF
 
 ---
 
-## Customize the Voltage Thresholds
+## How The Control Logic Works
 
-Want to change when it turns on/off? Easy!
+**In AUTO mode:**
+1. If voltage drops to or below CUTOFF → Load turns OFF
+2. If voltage rises to or above RECONNECT → Load turns ON
+3. If voltage is between CUTOFF and RECONNECT → Load stays in current state
 
-### Find This Section in the Code (around line 147):
+**Example with defaults (cutoff=12.0V, reconnect=12.9V):**
+- Voltage at 13.0V → Load ON
+- Voltage drops to 12.5V → Load stays ON (above cutoff)
+- Voltage drops to 12.0V → Load turns OFF (at cutoff)
+- Voltage stays at 12.3V → Load stays OFF (below reconnect)
+- Voltage rises to 12.9V → Load turns ON (at reconnect)
 
-```cpp
-const float V_CUTOFF = 8.0;      // ← Change this
-const float V_RECONNECT = 12.0;  // ← Change this
+**Why use two thresholds?**
+
+Prevents rapid on/off cycling. Without a gap between cutoff and reconnect:
+- Load turns off at 12.0V
+- Battery voltage immediately rises (no load)
+- Load turns back on
+- Voltage drops again
+- Relay clicks on/off repeatedly (bad for relay and battery)
+
+With a gap (12.0V cutoff, 12.9V reconnect), the battery must fully recover before reconnecting.
+
+---
+
+## JSON API For External Programs
+
+**Get current status:**
+```
+GET http://[ESP32-IP]/status.json
 ```
 
-### Examples:
-
-**For 12V car battery (lead acid):**
-```cpp
-const float V_CUTOFF = 11.5;     // Turn off at 11.5V
-const float V_RECONNECT = 12.4;  // Turn on at 12.4V
+**Response:**
+```json
+{
+  "voltage_v": 11.63,
+  "load_on": false,
+  "auto_mode": true,
+  "uptime_ms": 123456,
+  "v_cutoff": 11.00,
+  "v_reconnect": 12.90
+}
 ```
 
-**For 12V LiFePO4 battery:**
-```cpp
-const float V_CUTOFF = 12.0;     // Turn off at 12.0V
-const float V_RECONNECT = 12.9;  // Turn on at 12.9V
+**Change thresholds:**
+```
+GET http://[ESP32-IP]/settings?lower=11.0&upper=12.5
 ```
 
-**For more runtime (use more battery capacity):**
-```cpp
-const float V_CUTOFF = 10.0;     // Turn off at 10V
-const float V_RECONNECT = 12.0;  // Turn on at 12V
+**Response:**
+```json
+{
+  "v_cutoff": 11.00,
+  "v_reconnect": 12.50,
+  "changed": true
+}
 ```
 
-**⚠️ Important Rules:**
-- RECONNECT voltage must be HIGHER than CUTOFF voltage
-- Larger gap = less on/off cycling
-- Never go below 8V for most batteries
-
-After changing, just **upload the code again**!
+**Control relay:**
+```
+GET http://[ESP32-IP]/relay?auto=1      (enable auto mode)
+GET http://[ESP32-IP]/relay?on=1        (force load ON)
+GET http://[ESP32-IP]/relay?on=0        (force load OFF)
+```
 
 ---
 
 ## Troubleshooting
 
-### Problem: Wrong voltage reading
+### Wrong Voltage Reading
 
-**Fix:** Check your resistor values with a multimeter. If they're different, update these lines:
+**Problem:** Displayed voltage doesn't match multimeter
 
+**Fix:** Verify resistor values. Measure each resistor with multimeter:
+- Top resistor should be 100kΩ (Brown-Black-Yellow)
+- Bottom resistor should be 10kΩ (Brown-Black-Orange)
+
+If your resistors are different, update line 82 in the code:
 ```cpp
-const float RTOP = 10000.0;   // Change to your actual top resistor value
-const float RBOT = 1000.0;    // Change to your actual bottom resistor value
+const float RTOP = 100000.0;  // Change to your measured value
+const float RBOT = 10000.0;   // Change to your measured value
 ```
 
-### Problem: Voltage jumps around
+### Voltage Reading Too High (36V or maxed out)
 
-**Fix:** 
-- Add a bigger capacitor (try 1µF instead of 0.1µF)
-- Keep wires short
-- Check all connections
+**Problem:** Reading shows impossible voltage like 36V
 
-### Problem: Relay doesn't click
+**Fix:** The resistors are likely swapped. Check that:
+- 100kΩ resistor connects Battery+ to ADC point
+- 10kΩ resistor connects ADC point to GND
+- NOT the other way around
+
+### Voltage Jumps Around
+
+**Problem:** Voltage reading is unstable or noisy
 
 **Fix:**
-- Check relay has 5V power (VCC pin)
-- Verify GPIO2 is connected to relay IN
-- Check if your relay is active HIGH or active LOW
-- If it's backwards, change this line (around line 68):
+- Add larger capacitor (1µF instead of 0.1µF)
+- Keep voltage divider wires short
+- Check all connections are solid
+- Move voltage divider away from noisy components
 
-```cpp
-const bool RELAY_ACTIVE_LOW = true;   // Change to false if needed
-```
+### Relay Doesn't Click
 
-### Problem: Can't upload code
+**Problem:** Relay never activates
 
 **Fix:**
-1. Close Serial Monitor
-2. Try different USB port
-3. Use `/dev/tty.usbserial-*` instead of `cu.usbserial-*`
-4. Hold BOOT button while clicking upload
+- Check relay VCC pin has 5V power
+- Verify GPIO27 connects to relay IN pin
+- Check relay GND connects to ESP32 GND
+- Test relay manually by connecting IN pin directly to GND
 
-### Problem: Load doesn't turn on
+### Load Doesn't Turn On
+
+**Problem:** Relay clicks but load has no power
 
 **Fix:**
-- Make sure you're using **NO (Normally Open)** terminal on relay, not NC
-- Check all grounds are connected
-- Try clicking "Force ON" button on web page
-- Check relay is getting 5V power
+- Verify using NO terminal on relay, not NC
+- Check COM terminal has power supply connected
+- Check NO terminal connects to load positive
+- Verify load GND connects to common ground
+- Try "Force ON" button on web page
+
+### Can't Upload Code
+
+**Problem:** Upload fails with serial errors
+
+**Fix:**
+- Close Serial Monitor before uploading
+- Try different USB cable
+- Use /dev/tty.usbserial-* port instead of /dev/cu.*
+- Hold BOOT button during upload
+- Check nothing else (Chrome, etc.) is using the serial port:
+  ```bash
+  lsof | grep usbserial
+  ```
 
 ---
 
-## How It Works (Simple Explanation)
+## Technical Specifications
 
-### The Protection Cycle
-
-```
-Battery is at 13V
-        ↓
-   [Load is ON] ✅
-        ↓
-Battery drains while load runs
-        ↓
-Voltage drops to 8V
-        ↓
- [Load Turns OFF] 🔴 (relay opens)
-        ↓
-Battery charges (solar, charger, etc.)
-        ↓
-Voltage rises: 8V → 9V → 10V → 11V → 12V
-        ↓
- [Load Turns ON] 🟢 (relay closes)
-        ↓
-Cycle repeats
-```
-
-### Why Two Different Voltages?
-
-**Without gap (bad):**
-- Battery at 10V → Load OFF
-- Load turns off → Voltage rises to 10.1V
-- Voltage above 10V → Load ON
-- Load turns on → Voltage drops to 10V
-- **Result:** Relay clicks on/off rapidly! ⚡
-
-**With gap (good):**
-- Battery at 8V → Load OFF
-- Must charge all the way to 12V before turning back on
-- **Result:** Smooth operation ✅
-
-The gap between 8V and 12V prevents this rapid cycling.
+| Parameter | Value |
+|-----------|-------|
+| Input voltage range | 8V - 16V |
+| ADC resolution | 12-bit (0-4095) |
+| ADC pin | GPIO36 (VP, ADC1_CH0) |
+| Relay control pin | GPIO27 |
+| Relay type | NO (Normally Open) |
+| Voltage measurement rate | 4 Hz (every 250ms) |
+| Web update rate | 1 Hz (every 1 second) |
+| Smoothing | 100 sample average + 10 point moving average |
+| WiFi | 2.4GHz only (ESP32 limitation) |
 
 ---
 
-## Relay Wiring: NO vs NC
+## Voltage Divider Calculation
 
-Your system uses **NO (Normally Open)** contact.
-
-### What's the difference?
-
-**NO (Normally Open) - What you have ✅**
+**Formula:**
 ```
-Relay OFF → Contact OPEN → Load has NO power
-Relay ON  → Contact CLOSED → Load has power
+V_adc = V_battery × (R_bottom / (R_top + R_bottom))
 ```
 
-**NC (Normally Closed) - Not using this**
+**With 100kΩ top and 10kΩ bottom:**
 ```
-Relay OFF → Contact CLOSED → Load has power
-Relay ON  → Contact OPEN → Load has NO power
-```
-
-### How to identify on your relay:
-
-Most relay modules have 3 terminals:
-- **COM** (Common) - Connect your power supply here
-- **NO** (Normally Open) - Connect your load here ← **Use this one**
-- **NC** (Normally Closed) - Don't use this
-
----
-
-## Technical Specs
-
-| Specification | Value |
-|--------------|-------|
-| **Input Voltage Range** | 8V - 16V (can measure higher with different resistors) |
-| **Default Cutoff** | 8.0V |
-| **Default Reconnect** | 12.0V |
-| **Relay Type** | NO (Normally Open) |
-| **ESP32 Pin (ADC)** | GPIO36 (VP) |
-| **ESP32 Pin (Relay)** | GPIO2 |
-| **Update Rate** | 4 times per second (250ms) |
-| **Web Update** | Once per second |
-| **WiFi** | 2.4GHz only |
-
----
-
-## JSON API
-
-Want to read the data from another program? Use the JSON endpoint:
-
-**URL:** `http://[ESP32_IP]/status.json`
-
-**Example response:**
-```json
-{
-  "voltage_v": 11.87,
-  "percent": 57,
-  "load_on": false,
-  "auto_mode": true,
-  "uptime_ms": 123456
-}
+V_adc = V_battery × (10000 / (100000 + 10000))
+V_adc = V_battery × 0.0909
+V_adc = V_battery / 11
 ```
 
-**Example in Python:**
-```python
-import requests
-response = requests.get('http://10.17.192.114/status.json')
-data = response.json()
-print(f"Battery: {data['voltage_v']}V")
-print(f"Load: {'ON' if data['load_on'] else 'OFF'}")
+**Safety check for 14.6V max (charging voltage):**
+```
+V_adc_max = 14.6V / 11 = 1.33V
 ```
 
-**Example in curl:**
-```bash
-curl http://10.17.192.114/status.json
-```
+This is well below the 3.3V maximum for ESP32 ADC. Safe operation confirmed.
 
 ---
 
 ## Safety Notes
 
-⚠️ **Important Safety Information:**
-
-1. **Check your battery voltage rating** - Don't exceed the voltage divider limits
-2. **All grounds must be connected** - Battery GND, ESP32 GND, relay GND, load GND
-3. **Check relay current rating** - Make sure it can handle your load current
-4. **Use appropriate wire gauge** - Thin wires can overheat with high current
-5. **Test without load first** - Verify voltage readings before connecting your actual load
-6. **Never short circuit the battery** - Always double-check connections
-
----
-
-## Files in This Project
-
-- **`voltage_meter.ino`** - Main code (upload this to ESP32)
-- **`README.md`** - This file (instructions)
-- **`THRESHOLD_QUICK_GUIDE.md`** - Quick reference for changing thresholds
+1. Check battery voltage rating before connecting
+2. Connect all grounds together (battery, ESP32, relay, load)
+3. Verify relay current rating matches your load
+4. Use appropriate wire gauge for load current
+5. Test voltage reading with multimeter before connecting load
+6. Never short circuit battery terminals
+7. Double-check wiring before powering on
 
 ---
 
-## Support
+## Files
 
-**Having issues?**
-
-1. Check the [Troubleshooting](#troubleshooting) section above
-2. Verify all wiring matches the diagrams
-3. Open Serial Monitor (115200 baud) to see debug messages
-4. Check that all grounds are connected together
-
-**Common mistakes:**
-- ❌ Using NC instead of NO on the relay
-- ❌ Forgetting to connect all grounds together
-- ❌ Wrong resistor values in voltage divider
-- ❌ Serial Monitor open while trying to upload
-- ❌ Relay VCC not connected to 5V
+- `voltage_meter.ino` - Main Arduino code
+- `README.md` - This documentation  
+- `circuit_diagram.png` - Circuit wiring photo
+- `CIRCUIT_DOCUMENTATION.md` - Detailed technical documentation
 
 ---
 
 ## License
 
-Open source and free to use. Modify as needed for your project!
+Open source. Free to use and modify.
 
 ---
 
-**Made for protecting batteries and making monitoring easy! 🔋⚡**
-
-**GitHub:** [https://github.com/Environmental-Dashboard/-Battery-Cutoff-Monitor](https://github.com/Environmental-Dashboard/-Battery-Cutoff-Monitor)
+**GitHub:** https://github.com/Environmental-Dashboard/-Battery-Cutoff-Monitor

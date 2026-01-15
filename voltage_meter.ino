@@ -536,15 +536,19 @@ void handleSettings() {
   // IMPORTANT: Re-evaluate load state immediately after threshold change
   // This ensures the system responds to new thresholds right away
   if (changed && autoMode) {
-    // Check if load should turn OFF with new threshold
-    if (loadEnabled && lastVBat <= V_CUTOFF) {
-      applyLoadState(false);
-      Serial.println("! Threshold change triggered: Load turned OFF");
+    if (lastVBat <= V_CUTOFF) {
+      // Below cutoff - turn OFF
+      if (loadEnabled) {
+        applyLoadState(false);
+        Serial.println("! Threshold change triggered: Load turned OFF");
+      }
     }
-    // Check if load should turn ON with new threshold
-    else if (!loadEnabled && lastVBat >= V_RECONNECT) {
-      applyLoadState(true);
-      Serial.println("! Threshold change triggered: Load turned ON");
+    else if (lastVBat >= V_RECONNECT) {
+      // Above reconnect - turn ON
+      if (!loadEnabled) {
+        applyLoadState(true);
+        Serial.println("! Threshold change triggered: Load turned ON");
+      }
     }
   }
   
@@ -672,17 +676,23 @@ void loop() {
     float rawVoltage = readBatteryVoltage();
     lastVBat = smoothVoltage(rawVoltage);  // Ultra-stable display value
     
-    // Automatic hysteresis control (only if in auto mode)
+    // Automatic control (only if in auto mode)
+    // Simple logic: turn OFF when voltage drops to or below cutoff,
+    // turn ON when voltage rises to or above reconnect threshold
     if (autoMode) {
-      // Check if load should be disconnected (battery too low)
-      if (loadEnabled && lastVBat <= V_CUTOFF) {
-        Serial.println("! CUTOFF: Battery voltage low, disconnecting load");
-        applyLoadState(false);
+      if (lastVBat <= V_CUTOFF) {
+        // Voltage is at or below cutoff - turn OFF
+        if (loadEnabled) {
+          Serial.println("! CUTOFF: Battery voltage low, disconnecting load");
+          applyLoadState(false);
+        }
       }
-      // Check if load should be reconnected (battery recovered)
-      else if (!loadEnabled && lastVBat >= V_RECONNECT) {
-        Serial.println("! RECONNECT: Battery voltage recovered, reconnecting load");
-        applyLoadState(true);
+      else if (lastVBat >= V_RECONNECT) {
+        // Voltage is at or above reconnect - turn ON
+        if (!loadEnabled) {
+          Serial.println("! RECONNECT: Battery voltage recovered, reconnecting load");
+          applyLoadState(true);
+        }
       }
     }
     

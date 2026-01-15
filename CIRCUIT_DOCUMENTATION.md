@@ -41,15 +41,7 @@ This circuit manages power distribution from a solar panel and LiFePO4 battery, 
 
 ## Circuit Diagram
 
-### Add Your Circuit Image Here:
-
-```
-![Circuit Diagram](circuit_diagram.png)
-```
-
-**To add an image:**
-1. Save your circuit diagram as `circuit_diagram.png` in this folder
-2. Or use a URL: `![Circuit Diagram](https://your-url.com/image.png)`
+![Circuit Wiring](circuit_diagram.png)
 
 ---
 
