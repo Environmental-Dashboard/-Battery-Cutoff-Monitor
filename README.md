@@ -196,6 +196,22 @@ curl "http://10.17.195.65/settings?lower=11.0&upper=12.0"
 {
   "v_cutoff": 11.00,
   "v_reconnect": 12.00,
+  "calibration_factor": 1.0000,
+  "changed": true
+}
+```
+
+**Calibrate ADC (adjust voltage readings):**
+```
+GET http://[ESP32-IP]/settings?calibrate=1.016
+```
+
+**Response:**
+```json
+{
+  "v_cutoff": 11.00,
+  "v_reconnect": 12.90,
+  "calibration_factor": 1.0160,
   "changed": true
 }
 ```
@@ -265,7 +281,8 @@ GET http://[ESP32-IP]/status.json
   "auto_mode": true,
   "uptime_ms": 123456,
   "v_cutoff": 11.00,
-  "v_reconnect": 12.90
+  "v_reconnect": 12.90,
+  "calibration_factor": 1.0000
 }
 ```
 
@@ -298,7 +315,26 @@ GET http://[ESP32-IP]/relay?on=0        (force load OFF)
 
 **Problem:** Displayed voltage doesn't match multimeter
 
-**Fix:** Verify resistor values. Measure each resistor with multimeter:
+**Fix 1: Calibrate the ADC**
+
+The ESP32 ADC reference voltage varies from chip to chip (1000mV to 1200mV), causing reading inaccuracies. Calibrate using these steps:
+
+1. Measure actual battery voltage with a multimeter (e.g., 12.50V)
+2. Check displayed voltage on web interface (e.g., 12.30V)
+3. Calculate calibration factor:
+   ```
+   factor = measured_voltage / displayed_voltage
+   factor = 12.50 / 12.30 = 1.016
+   ```
+4. Set calibration via web API:
+   ```
+   http://[ESP32-IP]/settings?calibrate=1.016
+   ```
+5. Verify: Display should now show ~12.50V
+
+**Fix 2: Verify resistor values**
+
+If calibration doesn't help, check resistor values. Measure each resistor with multimeter:
 - Top resistor should be 100kΩ (Brown-Black-Yellow)
 - Bottom resistor should be 10kΩ (Brown-Black-Orange)
 
@@ -375,7 +411,8 @@ const float RBOT = 10000.0;   // Change to your measured value
 | Relay type | NO (Normally Open) |
 | Voltage measurement rate | 4 Hz (every 250ms) |
 | Web update rate | 1 Hz (every 1 second) |
-| Smoothing | 100 sample average + 10 point moving average |
+| Smoothing | 150 sample average + 20 point moving average |
+| ADC calibration | Adjustable factor (default 1.0) |
 | WiFi | 2.4GHz only (ESP32 limitation) |
 
 ---
