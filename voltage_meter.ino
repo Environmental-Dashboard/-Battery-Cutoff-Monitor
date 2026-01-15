@@ -587,28 +587,26 @@ void handleRelay() {
 void handleSettings() {
   bool changed = false;
   
-  // Check for lower threshold change
+  // Accept threshold changes from either "lower" or "upper" parameter
+  // Both set the cutoff threshold (for backwards compatibility)
   if (server.hasArg("lower")) {
-    float newLower = server.arg("lower").toFloat();
-    if (newLower > 8.0 && newLower < 15.0) {  // Safety limits
-      V_CUTOFF = newLower;
+    float newValue = server.arg("lower").toFloat();
+    if (newValue > 8.0 && newValue < 15.0) {  // Safety limits
+      V_CUTOFF = newValue;
       changed = true;
     }
   }
   
-  // Check for upper threshold change
   if (server.hasArg("upper")) {
-    float newUpper = server.arg("upper").toFloat();
-    if (newUpper > 8.0 && newUpper < 15.0) {  // Safety limits
-      V_RECONNECT = newUpper;
+    float newValue = server.arg("upper").toFloat();
+    if (newValue > 8.0 && newValue < 15.0) {  // Safety limits
+      V_CUTOFF = newValue;  // Set cutoff, not reconnect
       changed = true;
     }
   }
   
-  // Validate that upper > lower
-  if (V_RECONNECT <= V_CUTOFF) {
-    V_RECONNECT = V_CUTOFF + 0.5;  // Force minimum 0.5V gap
-  }
+  // Keep V_RECONNECT in sync for display purposes
+  V_RECONNECT = V_CUTOFF;
   
   // IMPORTANT: Re-evaluate load state immediately after threshold change
   // This ensures the system responds to new thresholds right away
