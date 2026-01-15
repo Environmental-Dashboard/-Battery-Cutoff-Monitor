@@ -63,7 +63,7 @@ const char* WIFI_PASS = "122ElmStreet";
 
 // Pin Assignments
 const int ADC_PIN = 36;      // GPIO36 (VP) - ADC1_CH0, works with WiFi enabled
-const int RELAY_PIN = 2;     // GPIO2 - Controls relay module
+const int RELAY_PIN = 27;    // GPIO27 (D27) - Controls relay module
 
 // Relay Configuration
 // Most relay modules are "active LOW" - setting pin LOW energizes the coil
@@ -80,13 +80,14 @@ const bool RELAY_ACTIVE_LOW = true;
 // Formula: Vadc = Vbat × (RBOT / (RTOP + RBOT))
 // For safety: Vadc_max should be < 3.3V when Vbat is at maximum (14.6V)
 //
-const float RTOP = 10000.0;   // Top resistor (Battery+ to ADC node) in Ohms
-const float RBOT = 1000.0;    // Bottom resistor (ADC node to GND) in Ohms
+// CURRENT WIRING: 100kΩ on top, 10kΩ on bottom (SAFE - same ratio as 10k/1k)
+const float RTOP = 100000.0;  // Top resistor (Battery+ to ADC node) in Ohms  
+const float RBOT = 10000.0;   // Bottom resistor (ADC node to GND) in Ohms
 
 // ADC Configuration
 const float VREF = 3.3;       // ESP32 reference voltage (typically 3.3V)
 const int ADC_MAX = 4095;     // 12-bit ADC resolution (0-4095)
-const int SAMPLES = 32;       // Number of samples to average for stable reading
+const int SAMPLES = 100;      // Number of samples to average for stable reading (increased for stability)
 
 // ============================================================================
 // BATTERY PROTECTION THRESHOLDS - CUSTOMIZE THESE FOR YOUR NEEDS
@@ -148,8 +149,9 @@ const int SAMPLES = 32;       // Number of samples to average for stable reading
 //
 // ============================================================================
 
-const float V_CUTOFF = 8.0;      // Disconnect load at or below this voltage
-const float V_RECONNECT = 12.0;  // Reconnect load at or above this voltage
+// Thresholds are changeable via web interface
+float V_CUTOFF = 12.0;           // Disconnect load at or below this voltage (changeable)
+float V_RECONNECT = 12.9;        // Reconnect load at or above this voltage (changeable)
 
 // ============================================================================
 
@@ -163,7 +165,12 @@ bool loadEnabled = true;      // Current load state: true = load connected
 bool autoMode = true;         // Control mode: true = automatic, false = manual
 
 float lastVBat = 0.0;        // Last measured battery voltage
-int lastPct = 0;             // Last calculated battery percentage
+// int lastPct = 0;          // Percentage removed - not used
+
+// Moving average for ultra-stable voltage display
+const int DISPLAY_SAMPLES = 10;
+float voltageHistory[10] = {0};
+int voltageIndex = 0;
 
 // ============================================================================
 // RELAY CONTROL FUNCTIONS
@@ -200,6 +207,21 @@ void applyLoadState(bool wantLoadOn) {
   loadEnabled = wantLoadOn;
   // NO relay logic: To enable load, relay must be energized
   setRelayEnergized(wantLoadOn);
+}
+
+/**
+ * Smooths voltage reading with moving average
+ * Provides ultra-stable display value
+ */
+float smoothVoltage(float newVoltage) {
+  voltageHistory[voltageIndex] = newVoltage;
+  voltageIndex = (voltageIndex + 1) % DISPLAY_SAMPLES;
+  
+  float sum = 0;
+  for (int i = 0; i < DISPLAY_SAMPLES; i++) {
+    sum += voltageHistory[i];
+  }
+  return sum / DISPLAY_SAMPLES;
 }
 
 // ============================================================================
@@ -246,39 +268,38 @@ float readBatteryVoltage() {
 // ============================================================================
 
 /**
- * Estimates battery state of charge from voltage
+ * Estimates LiFePO4 battery state of charge from voltage
  * 
  * @param v Battery voltage in volts
  * @return Estimated percentage (0-100)
  * 
- * Lead Acid 12V battery voltage curve:
- * - 11.7V or below → 0% (empty - needs charging)
- * - 11.8V → 10%
- * - 12.0V → 25%
- * - 12.2V → 50%
- * - 12.4V → 75%
- * - 12.6V or above → 100% (fully charged)
+ * LiFePO4 voltage curve (at rest, no load):
+ * - 12.0V or below → 0% (empty)
+ * - 12.0V - 12.4V → 0-20% (steep discharge curve)
+ * - 12.4V - 12.8V → 20-70% (flat discharge plateau - typical LiFePO4)
+ * - 12.8V - 13.2V → 70-90% (upper plateau)
+ * - 13.2V - 13.6V → 90-100% (approaching full)
+ * - 13.6V or above → 100% (full or charging)
  * 
- * Note: Voltage should be measured at rest (no load/charge for 30+ min)
+ * Note: This is an approximation. Actual SOC depends on temperature,
+ * load current, battery age, and rest time. Most accurate when battery
+ * has been resting (no charge/discharge) for 30+ minutes.
  */
 int lifepo4Percent(float v) {
-  if (v <= 11.7) return 0;
-  if (v >= 12.6) return 100;
+  if (v <= 12.0) return 0;
+  if (v >= 13.6) return 100;
   
-  // 0-10%: 11.7V to 11.8V
-  if (v < 11.8) return (int)((v - 11.7) / 0.1 * 10.0);
+  // 0-20%: 12.0V to 12.4V
+  if (v < 12.4) return (int)((v - 12.0) / 0.4 * 20.0);
   
-  // 10-25%: 11.8V to 12.0V
-  if (v < 12.0) return 10 + (int)((v - 11.8) / 0.2 * 15.0);
+  // 20-70%: 12.4V to 12.8V (flat plateau region)
+  if (v < 12.8) return 20 + (int)((v - 12.4) / 0.4 * 50.0);
   
-  // 25-50%: 12.0V to 12.2V
-  if (v < 12.2) return 25 + (int)((v - 12.0) / 0.2 * 25.0);
+  // 70-90%: 12.8V to 13.2V
+  if (v < 13.2) return 70 + (int)((v - 12.8) / 0.4 * 20.0);
   
-  // 50-75%: 12.2V to 12.4V
-  if (v < 12.4) return 50 + (int)((v - 12.2) / 0.2 * 25.0);
-  
-  // 75-100%: 12.4V to 12.6V
-  return 75 + (int)((v - 12.4) / 0.2 * 25.0);
+  // 90-100%: 13.2V to 13.6V
+  return 90 + (int)((v - 13.2) / 0.4 * 10.0);
 }
 
 // ============================================================================
@@ -292,7 +313,7 @@ int lifepo4Percent(float v) {
  * - Responsive design (works on mobile)
  * - Live updating display (fetches /status.json every second)
  * - Manual control buttons (Auto, Force On, Force Off)
- * - Shows voltage, percentage, load state, and control mode
+ * - Shows voltage, load state, and control mode
  * 
  * @return HTML page as String
  */
@@ -305,69 +326,68 @@ String htmlPage() {
   s += "<!doctype html><html><head><meta name='viewport' content='width=device-width, initial-scale=1'>";
   s += "<title>Battery Monitor</title>";
   
-  // Embedded CSS for clean, card-based design
+  // Embedded CSS for clean, simple design
   s += "<style>";
-  s += "body{font-family:Arial,sans-serif;padding:16px;background:#f5f5f5;margin:0}";
-  s += ".card{border:1px solid #ddd;border-radius:12px;padding:20px;max-width:460px;background:white;margin:0 auto;box-shadow:0 2px 4px rgba(0,0,0,0.1)}";
-  s += ".big{font-size:36px;font-weight:700;color:#2c3e50;margin:10px 0}";
-  s += ".row{margin:12px 0;font-size:16px}";
-  s += "button{padding:12px 16px;margin:4px;border-radius:8px;border:1px solid #3498db;background:#3498db;color:white;cursor:pointer;font-size:14px;font-weight:600}";
-  s += "button:hover{background:#2980b9;border-color:#2980b9}";
-  s += "button:active{transform:scale(0.98)}";
-  s += ".status{display:inline-block;padding:4px 12px;border-radius:6px;font-weight:600}";
-  s += ".status-on{background:#27ae60;color:white}";
-  s += ".status-off{background:#e74c3c;color:white}";
-  s += ".status-auto{background:#f39c12;color:white}";
-  s += ".status-manual{background:#95a5a6;color:white}";
-  s += "small{color:#7f8c8d}";
-  s += ".ref-table{width:100%;border-collapse:collapse;margin-top:15px;font-size:14px}";
-  s += ".ref-table td{padding:6px 8px;border-bottom:1px solid #eee}";
-  s += ".ref-table td:first-child{font-weight:700;color:#2c3e50}";
-  s += ".ref-table td:last-child{color:#7f8c8d;text-align:right}";
-  s += ".ref-title{font-weight:600;color:#2c3e50;margin-top:20px;margin-bottom:10px;font-size:14px}";
+  s += "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:20px;background:#f8f9fa;margin:0}";
+  s += ".card{border:none;border-radius:16px;padding:32px;max-width:500px;background:white;margin:0 auto;box-shadow:0 4px 12px rgba(0,0,0,0.08)}";
+  s += "h1{font-size:24px;font-weight:600;color:#1a1a1a;margin:0 0 24px 0}";
+  s += ".voltage{font-size:56px;font-weight:700;color:#2c3e50;margin:16px 0;text-align:center}";
+  s += ".info{display:flex;justify-content:space-between;align-items:center;padding:16px;background:#f8f9fa;border-radius:12px;margin:12px 0;font-size:15px}";
+  s += ".label{color:#6c757d;font-weight:500}";
+  s += ".value{font-weight:600;color:#1a1a1a}";
+  s += ".status{display:inline-block;padding:6px 14px;border-radius:8px;font-weight:600;font-size:14px}";
+  s += ".status-on{background:#d4edda;color:#155724}";
+  s += ".status-off{background:#f8d7da;color:#721c24}";
+  s += ".status-auto{background:#fff3cd;color:#856404}";
+  s += ".status-manual{background:#e2e3e5;color:#383d41}";
+  s += ".threshold{color:#0066cc;font-weight:600}";
+  s += ".buttons{display:flex;gap:8px;margin-top:24px}";
+  s += "button{flex:1;padding:14px;border-radius:10px;border:none;background:#007bff;color:white;cursor:pointer;font-size:15px;font-weight:600;transition:all 0.2s}";
+  s += "button:hover{background:#0056b3;transform:translateY(-1px)}";
+  s += "button:active{transform:translateY(0)}";
+  s += "small{color:#6c757d;display:block;text-align:center;margin-top:20px;font-size:13px}";
   s += "</style>";
   s += "</head><body>";
   
   // Main content card
   s += "<div class='card'>";
-  s += "<h2 style='margin-top:0;color:#2c3e50'>Battery Monitor</h2>";
-  
-  // ESP32 IP address
-  s += "<div class='row'>ESP32 IP: <b>" + ip + "</b></div>";
+  s += "<h1>🔋 Battery Monitor</h1>";
   
   // Large voltage display
-  s += "<div class='row big' id='v'>--.-- V</div>";
+  s += "<div class='voltage' id='v'>--.-- V</div>";
   
-  // Battery percentage
-  s += "<div class='row'>Battery: <b id='p'>--</b>%</div>";
+  // Load status
+  s += "<div class='info'>";
+  s += "<span class='label'>Load Status</span>";
+  s += "<span class='status' id='on'>--</span>";
+  s += "</div>";
   
-  // Load status with colored badge
-  s += "<div class='row'>Load: <span class='status' id='on'>--</span></div>";
+  // Control mode
+  s += "<div class='info'>";
+  s += "<span class='label'>Control Mode</span>";
+  s += "<span class='status' id='mode'>--</span>";
+  s += "</div>";
   
-  // Control mode with colored badge
-  s += "<div class='row'>Mode: <span class='status' id='mode'>--</span></div>";
+  // Thresholds
+  s += "<div class='info'>";
+  s += "<span class='label'>Turn OFF at</span>";
+  s += "<span class='value'><span class='threshold' id='lower'>--</span> V</span>";
+  s += "</div>";
+  
+  s += "<div class='info'>";
+  s += "<span class='label'>Turn ON at</span>";
+  s += "<span class='value'><span class='threshold' id='upper'>--</span> V</span>";
+  s += "</div>";
   
   // Control buttons
-  s += "<div class='row' style='margin-top:20px'>";
-  s += "<button onclick=\"fetch('/relay?auto=1').then(()=>tick())\">Auto Mode</button> ";
-  s += "<button onclick=\"fetch('/relay?on=1').then(()=>tick())\">Force ON</button> ";
+  s += "<div class='buttons'>";
+  s += "<button onclick=\"fetch('/relay?auto=1').then(()=>tick())\">Auto</button>";
+  s += "<button onclick=\"fetch('/relay?on=1').then(()=>tick())\">Force ON</button>";
   s += "<button onclick=\"fetch('/relay?on=0').then(()=>tick())\">Force OFF</button>";
   s += "</div>";
   
-  // Battery voltage reference table
-  s += "<div class='ref-title'>📊 Battery Voltage Reference</div>";
-  s += "<table class='ref-table'>";
-  s += "<tr><td>12.6V</td><td>100% (fully charged)</td></tr>";
-  s += "<tr><td>12.4V</td><td>75%</td></tr>";
-  s += "<tr><td>12.2V</td><td>50%</td></tr>";
-  s += "<tr><td>12.0V</td><td>25% 🟢 (load turns ON)</td></tr>";
-  s += "<tr><td>11.8V</td><td>10%</td></tr>";
-  s += "<tr><td>11.7V</td><td>0% (empty)</td></tr>";
-  s += "<tr><td>8.0V</td><td>🔴 Load turns OFF</td></tr>";
-  s += "</table>";
-  
-  // Footer info
-  s += "<div class='row' style='margin-top:20px'><small>Updates every 1 second from <code>/status.json</code></small></div>";
+  // Footer
+  s += "<small>" + ip + " • Updates every second</small>";
   s += "</div>";
   
   // JavaScript for live updates
@@ -377,26 +397,25 @@ String htmlPage() {
   s += "    const r = await fetch('/status.json',{cache:'no-store'});";
   s += "    const j = await r.json();";
   
-  // Update voltage display
+  // Update voltage
   s += "    document.getElementById('v').textContent = j.voltage_v.toFixed(2) + ' V';";
   
-  // Update percentage display
-  s += "    document.getElementById('p').textContent = j.percent;";
-  
-  // Update load status with colored badge
+  // Update load status
   s += "    const loadElem = document.getElementById('on');";
   s += "    loadElem.textContent = j.load_on ? 'ON' : 'OFF';";
   s += "    loadElem.className = 'status ' + (j.load_on ? 'status-on' : 'status-off');";
   
-  // Update mode with colored badge
+  // Update mode
   s += "    const modeElem = document.getElementById('mode');";
   s += "    modeElem.textContent = j.auto_mode ? 'AUTO' : 'MANUAL';";
   s += "    modeElem.className = 'status ' + (j.auto_mode ? 'status-auto' : 'status-manual');";
   
+  // Update thresholds
+  s += "    document.getElementById('lower').textContent = j.v_cutoff.toFixed(2);";
+  s += "    document.getElementById('upper').textContent = j.v_reconnect.toFixed(2);";
+  
   s += "  }catch(e){console.error('Fetch error:',e);}";
   s += "}";
-  
-  // Update every second and run immediately
   s += "setInterval(tick,1000); tick();";
   s += "</script>";
   
@@ -423,18 +442,20 @@ void handleRoot() {
  * JSON format:
  * {
  *   "voltage_v": 12.345,
- *   "percent": 65,
  *   "load_on": true,
  *   "auto_mode": true,
+ *   "v_cutoff": 12.0,
+ *   "v_reconnect": 12.9,
  *   "uptime_ms": 123456
  * }
  */
 void handleStatus() {
   String json = "{";
   json += "\"voltage_v\":" + String(lastVBat, 3) + ",";
-  json += "\"percent\":" + String(lastPct) + ",";
   json += "\"load_on\":" + String(loadEnabled ? "true" : "false") + ",";
   json += "\"auto_mode\":" + String(autoMode ? "true" : "false") + ",";
+  json += "\"v_cutoff\":" + String(V_CUTOFF, 2) + ",";
+  json += "\"v_reconnect\":" + String(V_RECONNECT, 2) + ",";
   json += "\"uptime_ms\":" + String(millis());
   json += "}";
   server.send(200, "application/json", json);
@@ -471,6 +492,83 @@ void handleRelay() {
   server.send(200, "text/plain", "OK");
 }
 
+/**
+ * Handler for "/settings"
+ * Allows changing voltage thresholds dynamically
+ * 
+ * Query parameters:
+ * - ?lower=12.0  → Set cutoff voltage (V_CUTOFF)
+ * - ?upper=12.9  → Set reconnect voltage (V_RECONNECT)
+ * 
+ * Examples:
+ * - http://ESP32_IP/settings?lower=11.5&upper=12.5
+ * - http://ESP32_IP/settings?lower=12.0
+ * - http://ESP32_IP/settings?upper=13.0
+ * 
+ * Returns current settings as JSON
+ */
+void handleSettings() {
+  bool changed = false;
+  
+  // Check for lower threshold change
+  if (server.hasArg("lower")) {
+    float newLower = server.arg("lower").toFloat();
+    if (newLower > 8.0 && newLower < 15.0) {  // Safety limits
+      V_CUTOFF = newLower;
+      changed = true;
+    }
+  }
+  
+  // Check for upper threshold change
+  if (server.hasArg("upper")) {
+    float newUpper = server.arg("upper").toFloat();
+    if (newUpper > 8.0 && newUpper < 15.0) {  // Safety limits
+      V_RECONNECT = newUpper;
+      changed = true;
+    }
+  }
+  
+  // Validate that upper > lower
+  if (V_RECONNECT <= V_CUTOFF) {
+    V_RECONNECT = V_CUTOFF + 0.5;  // Force minimum 0.5V gap
+  }
+  
+  // IMPORTANT: Re-evaluate load state immediately after threshold change
+  // This ensures the system responds to new thresholds right away
+  if (changed && autoMode) {
+    // Check if load should turn OFF with new threshold
+    if (loadEnabled && lastVBat <= V_CUTOFF) {
+      applyLoadState(false);
+      Serial.println("! Threshold change triggered: Load turned OFF");
+    }
+    // Check if load should turn ON with new threshold
+    else if (!loadEnabled && lastVBat >= V_RECONNECT) {
+      applyLoadState(true);
+      Serial.println("! Threshold change triggered: Load turned ON");
+    }
+  }
+  
+  // Return current settings
+  String json = "{";
+  json += "\"v_cutoff\":" + String(V_CUTOFF, 2) + ",";
+  json += "\"v_reconnect\":" + String(V_RECONNECT, 2) + ",";
+  json += "\"changed\":" + String(changed ? "true" : "false");
+  json += "}";
+  
+  server.send(200, "application/json", json);
+  
+  if (changed) {
+    Serial.println("! SETTINGS CHANGED:");
+    Serial.print("  Cutoff: ");
+    Serial.print(V_CUTOFF, 2);
+    Serial.print("V, Reconnect: ");
+    Serial.print(V_RECONNECT, 2);
+    Serial.print("V, Current voltage: ");
+    Serial.print(lastVBat, 2);
+    Serial.println("V");
+  }
+}
+
 // ============================================================================
 // SETUP FUNCTION - RUNS ONCE AT STARTUP
 // ============================================================================
@@ -490,7 +588,7 @@ void setup() {
   
   // Configure ADC settings
   analogReadResolution(12);                     // 12-bit resolution (0-4095)
-  analogSetPinAttenuation(ADC_PIN, ADC_11db);  // 11dB attenuation (0-3.3V range)
+  analogSetPinAttenuation(ADC_PIN, ADC_11db);  // 11dB attenuation (0-~3.3V, non-linear)
   
   Serial.println("ADC configured: 12-bit, 11dB attenuation");
   
@@ -544,6 +642,7 @@ void setup() {
   server.on("/", handleRoot);              // Main page
   server.on("/status.json", handleStatus); // JSON API
   server.on("/relay", handleRelay);        // Manual control
+  server.on("/settings", handleSettings);  // Change thresholds
   
   // Start web server
   server.begin();
@@ -569,9 +668,9 @@ void loop() {
   if (millis() - lastReadTime >= 250) {
     lastReadTime = millis();
     
-    // Read battery voltage and calculate percentage
-    lastVBat = readBatteryVoltage();
-    lastPct = lifepo4Percent(lastVBat);
+    // Read battery voltage with smoothing
+    float rawVoltage = readBatteryVoltage();
+    lastVBat = smoothVoltage(rawVoltage);  // Ultra-stable display value
     
     // Automatic hysteresis control (only if in auto mode)
     if (autoMode) {
@@ -587,11 +686,9 @@ void loop() {
       }
     }
     
-    // Output CSV format to serial: voltage, percent, load_state
+    // Output CSV format to serial: voltage, load_state
     // This format is easy to parse and log externally
     Serial.print(lastVBat, 2);
-    Serial.print(",");
-    Serial.print(lastPct);
     Serial.print(",");
     Serial.println(loadEnabled ? 1 : 0);
   }

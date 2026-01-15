@@ -4,6 +4,9 @@
 
 🔋 **Protects your battery** • 🌐 **Web dashboard** • ⚙️ **Easy to customize**
 
+> **📖 FULL DOCUMENTATION:** [CIRCUIT_DOCUMENTATION.md](CIRCUIT_DOCUMENTATION.md) - Complete wiring diagrams, component list, power calculations, and technical specs  
+> **🖼️ Adding Images?:** [HOW_TO_ADD_IMAGES.md](HOW_TO_ADD_IMAGES.md) - Guide for adding circuit diagrams and photos
+
 ---
 
 ## What Does It Do?
