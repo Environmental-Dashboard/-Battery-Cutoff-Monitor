@@ -34,7 +34,10 @@ Monitors your battery voltage continuously. Uses two thresholds to protect your 
 | Bottom resistor | 10kΩ (Brown-Black-Orange) |
 | Capacitor | 0.1µF to 1µF ceramic |
 | Battery | 8V-16V (tested with 12.8V LiFePO4) |
+| **Charge Controller** | **REQUIRED for solar panels!** MPPT or PWM, rated for your panel |
 | Wires | Jumper wires and power wires |
+
+⚠️ **CRITICAL: If using a solar panel, you MUST have a charge controller!** Without it, the solar panel voltage (30-40V for a 380W panel) will destroy the ESP32 and 5V converter when the sun comes out!
 
 ---
 
@@ -575,14 +578,39 @@ This is well below the 3.3V maximum for ESP32 ADC. Safe operation confirmed.
 
 ## Safety Notes
 
-1. Check battery voltage rating before connecting
-2. Connect all grounds together (battery, ESP32, relay, load)
-3. Verify relay current rating matches your load
-4. Use appropriate wire gauge for load current
-5. Test voltage reading with multimeter before connecting load
-6. Calibrate ADC before relying on voltage readings
-7. Never short circuit battery terminals
-8. Double-check wiring before powering on
+### ⚠️ CRITICAL: Solar Panel Protection
+
+**If you have a solar panel, you MUST use a charge controller!**
+
+**Why:**
+- Solar panels output very high voltages (30-40V for a 380W panel)
+- The 5V converter can only handle 20-30V maximum input
+- Without a charge controller, when the sun comes out, the voltage spike will:
+  - Destroy the 5V converter
+  - Burn out the ESP32
+  - Damage other components
+
+**Correct Wiring:**
+```
+Solar Panel → Charge Controller INPUT
+Charge Controller OUTPUT → Battery Positive
+Battery → 5V Converter VIN
+```
+
+**NEVER connect solar panel directly to battery or converter!**
+
+### General Safety
+
+1. **ALWAYS use a charge controller with solar panels** - This is the #1 cause of ESP32 failure!
+2. Check battery voltage rating before connecting
+3. Connect all grounds together (battery, ESP32, relay, load)
+4. Verify relay current rating matches your load
+5. Use appropriate wire gauge for load current
+6. Test voltage reading with multimeter before connecting load
+7. Calibrate ADC before relying on voltage readings
+8. Never short circuit battery terminals
+9. Double-check wiring before powering on
+10. Check your 5V converter's maximum input voltage rating
 
 ---
 
